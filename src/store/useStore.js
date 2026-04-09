@@ -1,4 +1,19 @@
 import { create } from 'zustand';
+import axios from 'axios';
+
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+
+const API = axios.create({ baseURL: '/api' });
+
+const toBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result); // data-URL string
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
 const initialMenuItems = [
   // ===== STARTERS =====
@@ -218,8 +233,11 @@ const mergeCartWithDeltas = (baseCart, deltas = []) => {
   });
   return Array.from(mergedMap.values());
 };
+
 const useStore = create((set, get) => ({
-  // --- Menu Items ---
+  // ─────────────────────────────────────────────
+  // Local Menu Items (kept for offline / fallback)
+  // ─────────────────────────────────────────────
   menuItems: initialMenuItems,
 
   toggleAvailability: (id) =>
@@ -229,10 +247,144 @@ const useStore = create((set, get) => ({
       ),
     })),
 
-  // --- Users ---
+  // ─────────────────────────────────────────────
+  // DB-backed Menu (Admin Panel)
+  // ─────────────────────────────────────────────
+  dbMenu: [],
+  menuLoading: false,
+  menuError: null,
+
+  fetchMenu: async () => {
+    set({ menuLoading: true, menuError: null });
+    try {
+      const { data } = await API.get('/menu');
+      set({ dbMenu: data, menuLoading: false });
+    } catch (err) {
+      set({ menuError: err.response?.data?.error ?? err.message, menuLoading: false });
+    }
+  },
+
+  /**
+   * createMenuItem({ name, price, category, description, imageFile, isChefSpecial, tasteTags })
+   * Converts imageFile (File object) to Base64 before POSTing.
+   */
+  createMenuItem: async (fields) => {
+    set({ menuLoading: true, menuError: null });
+    try {
+      const image = fields.imageFile ? await toBase64(fields.imageFile) : '';
+      const payload = {
+        name: fields.name,
+        price: Number(fields.price),
+        category: fields.category,
+        description: fields.description ?? '',
+        image,
+        inStock: fields.inStock ?? true,
+        isChefSpecial: fields.isChefSpecial ?? false,
+        tasteTags: fields.tasteTags ?? [],
+      };
+      const { data } = await API.post('/menu', payload);
+      set((state) => ({ dbMenu: [data, ...state.dbMenu], menuLoading: false }));
+      return data;
+    } catch (err) {
+      set({ menuError: err.response?.data?.error ?? err.message, menuLoading: false });
+      return null;
+    }
+  },
+
+  /**
+   * updateMenuItem(id, patch)
+   * patch can be any subset: { price, inStock, name, … }
+   */
+  updateMenuItem: async (id, patch) => {
+    try {
+      const { data } = await API.put(`/menu/${id}`, patch);
+      set((state) => ({
+        dbMenu: state.dbMenu.map((item) => (item._id === id ? data : item)),
+      }));
+      return data;
+    } catch (err) {
+      set({ menuError: err.response?.data?.error ?? err.message });
+      return null;
+    }
+  },
+
+  deleteMenuItem: async (id) => {
+    try {
+      await API.delete(`/menu/${id}`);
+      set((state) => ({ dbMenu: state.dbMenu.filter((item) => item._id !== id) }));
+      return true;
+    } catch (err) {
+      set({ menuError: err.response?.data?.error ?? err.message });
+      return false;
+    }
+  },
+
+  // ─────────────────────────────────────────────
+  // DB-backed Stories (Admin Panel)
+  // ─────────────────────────────────────────────
+  stories: [],
+  storiesLoading: false,
+  storiesError: null,
+
+  fetchStories: async () => {
+    set({ storiesLoading: true, storiesError: null });
+    try {
+      const { data } = await API.get('/stories');
+      set({ stories: data, storiesLoading: false });
+    } catch (err) {
+      set({ storiesError: err.response?.data?.error ?? err.message, storiesLoading: false });
+    }
+  },
+
+  /**
+   * createStory({ title, imageFile })
+   * Converts imageFile to Base64 before POSTing.
+   */
+  createStory: async ({ title, imageFile }) => {
+    set({ storiesLoading: true, storiesError: null });
+    try {
+      const imageUrl = imageFile ? await toBase64(imageFile) : '';
+      const { data } = await API.post('/stories', { title, imageUrl, isActive: true });
+      set((state) => ({ stories: [data, ...state.stories], storiesLoading: false }));
+      return data;
+    } catch (err) {
+      set({ storiesError: err.response?.data?.error ?? err.message, storiesLoading: false });
+      return null;
+    }
+  },
+
+  updateStory: async (id, patch) => {
+    try {
+      const { data } = await API.put(`/stories/${id}`, patch);
+      set((state) => ({
+        stories: state.stories.map((s) => (s._id === id ? data : s)),
+      }));
+      return data;
+    } catch (err) {
+      set({ storiesError: err.response?.data?.error ?? err.message });
+      return null;
+    }
+  },
+
+  deleteStory: async (id) => {
+    try {
+      await API.delete(`/stories/${id}`);
+      set((state) => ({ stories: state.stories.filter((s) => s._id !== id) }));
+      return true;
+    } catch (err) {
+      set({ storiesError: err.response?.data?.error ?? err.message });
+      return false;
+    }
+  },
+
+  // ─────────────────────────────────────────────
+  // Users
+  // ─────────────────────────────────────────────
   users: initialUsers,
 
-  // --- Auth ---
+  // ─────────────────────────────────────────────
+  // Auth
+  // ─────────────────────────────────────────────
   auth: { role: null, customerName: '', tableNumber: null },
   currentUser: null,
 
@@ -284,10 +436,7 @@ const useStore = create((set, get) => ({
       };
       return {
         currentUser: updatedUser,
-        auth: {
-          ...state.auth,
-          customerName: updatedUser.name,
-        },
+        auth: { ...state.auth, customerName: updatedUser.name },
         users: state.users.map((user) =>
           user.email === state.currentUser.email ? updatedUser : user
         ),
@@ -298,11 +447,11 @@ const useStore = create((set, get) => ({
     set({ auth: { role: null, customerName: '', tableNumber: null }, currentUser: null, cart: [] }),
 
   setTable: (tableNumber) =>
-    set((state) => ({
-      auth: { ...state.auth, tableNumber },
-    })),
+    set((state) => ({ auth: { ...state.auth, tableNumber } })),
 
-  // --- Cart ---
+  // ─────────────────────────────────────────────
+  // Cart
+  // ─────────────────────────────────────────────
   cart: [],
   collaborativeMode: false,
 
@@ -323,11 +472,7 @@ const useStore = create((set, get) => ({
     set((state) => {
       const existing = state.cart.find((c) => c.id === id);
       if (existing && existing.qty > 1) {
-        return {
-          cart: state.cart.map((c) =>
-            c.id === id ? { ...c, qty: c.qty - 1 } : c
-          ),
-        };
+        return { cart: state.cart.map((c) => (c.id === id ? { ...c, qty: c.qty - 1 } : c)) };
       }
       return { cart: state.cart.filter((c) => c.id !== id) };
     }),
@@ -337,9 +482,7 @@ const useStore = create((set, get) => ({
   setCollaborativeMode: (enabled) => set({ collaborativeMode: Boolean(enabled) }),
 
   mergeRemoteCartItems: (remoteItems) =>
-    set((state) => ({
-      cart: mergeCartWithDeltas(state.cart, remoteItems),
-    })),
+    set((state) => ({ cart: mergeCartWithDeltas(state.cart, remoteItems) })),
 
   getCartTotal: () => {
     const { cart } = get();
@@ -351,7 +494,9 @@ const useStore = create((set, get) => ({
     return cart.reduce((sum, item) => sum + item.qty, 0);
   },
 
-  // --- Orders ---
+  // ─────────────────────────────────────────────
+  // Orders
+  // ─────────────────────────────────────────────
   orders: [],
 
   placeOrder: () => {
@@ -366,10 +511,7 @@ const useStore = create((set, get) => ({
       status: 'New',
       timestamp: new Date().toISOString(),
     };
-    set((state) => ({
-      orders: [newOrder, ...state.orders],
-      cart: [],
-    }));
+    set((state) => ({ orders: [newOrder, ...state.orders], cart: [] }));
     return newOrder;
   },
 

@@ -1,59 +1,111 @@
-const express = require('express');
-const mongoose = require('mongoose');
-require('dotenv').config();
+import express from 'express';
+import mongoose from 'mongoose';
+import 'dotenv/config';
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '20mb' })); // Allow large Base64 payloads
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/quisine', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/quisine');
 
-// Product/MenuItem Schema
-const productSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  price: { type: Number, required: true },
-  category: { type: String, required: true },
-  description: { type: String },
-  inStock: { type: Boolean, default: true },
-  image: { type: String } // Base64 image data
-});
+// ─────────────────────────────────────────────
+// Schemas & Models
+// ─────────────────────────────────────────────
 
-const Product = mongoose.model('Product', productSchema);
+const menuItemSchema = new mongoose.Schema(
+  {
+    name:        { type: String,  required: true },
+    price:       { type: Number,  required: true },
+    category:    { type: String,  required: true },
+    description: { type: String,  default: '' },
+    image:       { type: String,  default: '' }, // Base64 data-URL string
+    inStock:     { type: Boolean, default: true },
+    isChefSpecial: { type: Boolean, default: false },
+    tasteTags:   [{ type: String }],
+  },
+  { timestamps: true }
+);
 
-// Story Schema for Insta-stories
-const storySchema = new mongoose.Schema({
-  imageUrl: { type: String, required: true },
-  title: { type: String, required: true },
-  isActive: { type: Boolean, default: true }
-});
+const MenuItem = mongoose.model('MenuItem', menuItemSchema);
+
+const storySchema = new mongoose.Schema(
+  {
+    imageUrl: { type: String,  required: true }, // Base64 data-URL string
+    title:    { type: String,  required: true },
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true }
+);
 
 const Story = mongoose.model('Story', storySchema);
 
-// Routes for Products
-app.post('/api/products', async (req, res) => {
+// ─────────────────────────────────────────────
+// Menu Routes
+// ─────────────────────────────────────────────
+
+// GET all menu items
+app.get('/api/menu', async (req, res) => {
   try {
-    const product = new Product(req.body);
-    await product.save();
-    res.status(201).json(product);
+    const menuItems = await MenuItem.find().sort({ createdAt: -1 });
+    res.json(menuItems);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST create a menu item
+app.post('/api/menu', async (req, res) => {
+  try {
+    const menuItem = new MenuItem(req.body);
+    await menuItem.save();
+    res.status(201).json(menuItem);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-app.put('/api/products/:id', async (req, res) => {
+// PUT update a menu item (price, inStock, or any field)
+app.put('/api/menu/:id', async (req, res) => {
   try {
-    const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!product) return res.status(404).json({ error: 'Product not found' });
-    res.json(product);
+    const menuItem = await MenuItem.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+    if (!menuItem) return res.status(404).json({ error: 'Menu item not found' });
+    res.json(menuItem);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-// Routes for Stories
+// DELETE a menu item
+app.delete('/api/menu/:id', async (req, res) => {
+  try {
+    const menuItem = await MenuItem.findByIdAndDelete(req.params.id);
+    if (!menuItem) return res.status(404).json({ error: 'Menu item not found' });
+    res.json({ message: 'Menu item deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// Story Routes
+// ─────────────────────────────────────────────
+
+// GET all stories (optionally filter active only via ?active=true)
+app.get('/api/stories', async (req, res) => {
+  try {
+    const filter = req.query.active === 'true' ? { isActive: true } : {};
+    const stories = await Story.find(filter).sort({ createdAt: -1 });
+    res.json(stories);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST create a story
 app.post('/api/stories', async (req, res) => {
   try {
     const story = new Story(req.body);
@@ -64,9 +116,14 @@ app.post('/api/stories', async (req, res) => {
   }
 });
 
+// PUT update a story (toggle isActive, change title, etc.)
 app.put('/api/stories/:id', async (req, res) => {
   try {
-    const story = await Story.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const story = await Story.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
     if (!story) return res.status(404).json({ error: 'Story not found' });
     res.json(story);
   } catch (error) {
@@ -74,7 +131,21 @@ app.put('/api/stories/:id', async (req, res) => {
   }
 });
 
+// DELETE a story
+app.delete('/api/stories/:id', async (req, res) => {
+  try {
+    const story = await Story.findByIdAndDelete(req.params.id);
+    if (!story) return res.status(404).json({ error: 'Story not found' });
+    res.json({ message: 'Story deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// Start
+// ─────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Quisine server running on port ${PORT}`);
 });

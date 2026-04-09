@@ -14,6 +14,8 @@ import {
   X,
 } from 'lucide-react';
 import useStore from '../store/useStore';
+import MenuManager from '../components/MenuManager';
+import StoryManager from '../components/StoryManager';
 
 // --- Kanban Board ---
 function KanbanBoard() {
@@ -240,6 +242,8 @@ export default function AdminDashboard() {
   const navItems = [
     { id: 'orders', label: 'Live Orders', icon: ClipboardList, badge: orders.filter((o) => o.status === 'New').length },
     { id: 'menu', label: 'Menu Management', icon: UtensilsCrossed, badge: 0 },
+    { id: 'menu-manager', label: 'Menu Manager', icon: UtensilsCrossed, badge: 0 },
+    { id: 'story-manager', label: 'Story Manager', icon: LayoutDashboard, badge: 0 },
   ];
 
   const Sidebar = ({ mobile = false }) => (
@@ -338,7 +342,10 @@ export default function AdminDashboard() {
             <Menu className="w-5 h-5 text-sage-600" />
           </button>
           <h2 className="font-semibold text-headline">
-            {tab === 'orders' ? 'Live Orders' : 'Menu Management'}
+            {tab === 'orders' ? 'Live Orders' : 
+             tab === 'menu' ? 'Menu Management' :
+             tab === 'menu-manager' ? 'Menu Manager' :
+             tab === 'story-manager' ? 'Story Manager' : 'Dashboard'}
           </h2>
           <span className="ml-auto text-xs text-sage-400 bg-sage-50 px-2 py-1 rounded-full shrink-0">
             Admin
@@ -357,7 +364,7 @@ export default function AdminDashboard() {
               >
                 <KanbanBoard />
               </motion.div>
-            ) : (
+            ) : tab === 'menu' ? (
               <motion.div
                 key="menu"
                 initial={{ opacity: 0, x: -20 }}
@@ -366,7 +373,25 @@ export default function AdminDashboard() {
               >
                 <MenuManagement />
               </motion.div>
-            )}
+            ) : tab === 'menu-manager' ? (
+              <motion.div
+                key="menu-manager"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+              >
+                <MenuManager />
+              </motion.div>
+            ) : tab === 'story-manager' ? (
+              <motion.div
+                key="story-manager"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+              >
+                <StoryManager />
+              </motion.div>
+            ) : null}
           </AnimatePresence>
         </div>
       </div>
