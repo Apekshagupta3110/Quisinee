@@ -5,7 +5,7 @@ import axios from 'axios';
 // Helpers
 // ─────────────────────────────────────────────
 
-const API = axios.create({ baseURL: '/api' });
+const API = axios.create({ baseURL: 'https://quisinee-server.onrender.com/api' });
 
 const toBase64 = (file) =>
   new Promise((resolve, reject) => {
