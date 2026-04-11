@@ -20,7 +20,9 @@ const CATEGORY_META = {
 export default function CustomerMenu() {
   const { tableId } = useParams();
   const navigate = useNavigate();
-  const menuItems = useStore((s) => s.menuItems);
+  const dbMenu = useStore((s) => s.dbMenu);
+  const fetchMenu = useStore((s) => s.fetchMenu);
+  const menuLoading = useStore((s) => s.menuLoading);
   const auth = useStore((s) => s.auth);
   const cart = useStore((s) => s.cart);
   const collaborativeMode = useStore((s) => s.collaborativeMode);
@@ -35,20 +37,20 @@ export default function CustomerMenu() {
   const previousCartRef = useRef(cart);
 
   const customerName = auth.customerName || 'Guest';
-  const chefSpecials = menuItems.filter((i) => i.isChefSpecial && i.isAvailable);
+  const chefSpecials = dbMenu.filter((i) => i.isChefSpecial && i.inStock);
   const tableChannelName = String(auth.tableNumber || tableId || '');
 
   // Group items by category in display order
   const sections = useMemo(() => {
-    const order = ['Starters', 'Main Course', 'Beverages & Desserts'];
-    return order
-      .map((cat) => ({
-        category: cat,
-        meta: CATEGORY_META[cat] || { emoji: '🍽️', label: cat },
-        items: menuItems.filter((i) => i.category === cat),
-      }))
-      .filter((s) => s.items.length > 0);
-  }, [menuItems]);
+  const order = ['Starters', 'Main Course', 'Beverages & Desserts'];
+  return order
+    .map((cat) => ({
+      category: cat,
+      meta: CATEGORY_META[cat] || { emoji: '🍽️', label: cat },
+      items: dbMenu.filter((i) => i.category === cat && i.inStock),
+    }))
+    .filter((s) => s.items.length > 0);
+}, [dbMenu]);
 
   useEffect(() => {
     if (!collaborativeMode || !tableChannelName) return undefined;
@@ -97,6 +99,19 @@ export default function CustomerMenu() {
     }
     previousCartRef.current = cart;
   }, [cart, collaborativeMode, tableChannelName]);
+
+  useEffect(() => { fetchMenu(); }, []);
+
+  if (menuLoading && dbMenu.length === 0) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-crisp">
+      <div className="text-center">
+        <div className="w-10 h-10 border-4 border-[#E07A5F] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-sm text-charcoal-lighter">Loading menu...</p>
+      </div>
+    </div>
+  );
+}
 
   return (
     <div className="min-h-screen bg-crisp pb-24">
@@ -151,12 +166,13 @@ export default function CustomerMenu() {
                 </span>
               </h2>
             </div>
+            
             {/* Grid */}
-            <div className="grid grid-cols-2 gap-3 px-4">
-              {section.items.map((item, i) => (
-                <MenuCard key={item.id} item={item} onAR={setArItem} index={i} />
-              ))}
-            </div>
+<div className="grid grid-cols-2 gap-3 px-4">
+  {section.items.map((item, i) => (
+    <MenuCard key={item._id || item.id} item={item} onAR={setArItem} index={i} />
+  ))}
+</div>
           </div>
         ))}
       </div>

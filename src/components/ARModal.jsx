@@ -37,7 +37,7 @@ export default function ARModal({ open, item, onClose }) {
           {/* 3D Model Viewer */}
           <div className="flex-1 flex items-center justify-center px-4 pb-6">
             <model-viewer
-              src="https://modelviewer.dev/shared-assets/models/Astronaut.glb"
+              src="https://modelviewer.dev/shared-assets/models/royal-t-burger-ube-spread.glb"
               alt={`3D model of ${item.name}`}
               auto-rotate
               camera-controls

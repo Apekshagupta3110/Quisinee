@@ -80,7 +80,7 @@ const initialMenuItems = [
     category: 'Main Course',
     price: 179,
     description: 'Savory rice-lentil cake with vegetables, tempered with mustard seeds.',
-    image: 'https://images.unsplash.com/photo-1606491956689-2ea866880049?w=480&q=80',
+    image: 'https://images.unsplash.com/photo-1574653853027-5382a3d23a15?w=480&q=80',
     isAvailable: true,
     isChefSpecial: false,
     tasteTags: ['Savory', 'Healthy', 'Traditional'],
@@ -147,7 +147,7 @@ const initialMenuItems = [
     category: 'Beverages & Desserts',
     price: 99,
     description: 'Soft milk-solid dumplings soaked in warm rose-cardamom sugar syrup.',
-    image: 'https://images.unsplash.com/photo-1666190440416-834996985948?w=480&q=80',
+    image: 'https://images.unsplash.com/photo-1601303516534-bf5f8b8e10f5?w=480&q=80',
     isAvailable: true,
     isChefSpecial: false,
     tasteTags: ['Sweet', 'Warm', 'Traditional'],
@@ -456,27 +456,32 @@ const useStore = create((set, get) => ({
   cart: [],
   collaborativeMode: false,
 
-  addToCart: (menuItem) =>
-    set((state) => {
-      const existing = state.cart.find((c) => c.id === menuItem.id);
-      if (existing) {
-        return {
-          cart: state.cart.map((c) =>
-            c.id === menuItem.id ? { ...c, qty: c.qty + 1 } : c
-          ),
-        };
-      }
-      return { cart: [...state.cart, { ...menuItem, qty: 1 }] };
-    }),
+    addToCart: (menuItem) =>
+  set((state) => {
+    const itemId = menuItem._id || menuItem.id;
+    const existing = state.cart.find((c) => (c._id || c.id) === itemId);
+    if (existing) {
+      return {
+        cart: state.cart.map((c) =>
+          (c._id || c.id) === itemId ? { ...c, qty: c.qty + 1 } : c
+        ),
+      };
+    }
+    return { cart: [...state.cart, { ...menuItem, qty: 1 }] };
+  }),
 
   removeFromCart: (id) =>
-    set((state) => {
-      const existing = state.cart.find((c) => c.id === id);
-      if (existing && existing.qty > 1) {
-        return { cart: state.cart.map((c) => (c.id === id ? { ...c, qty: c.qty - 1 } : c)) };
-      }
-      return { cart: state.cart.filter((c) => c.id !== id) };
-    }),
+  set((state) => {
+    const existing = state.cart.find((c) => (c._id || c.id) === id);
+    if (existing && existing.qty > 1) {
+      return {
+        cart: state.cart.map((c) =>
+          (c._id || c.id) === id ? { ...c, qty: c.qty - 1 } : c
+        ),
+      };
+    }
+    return { cart: state.cart.filter((c) => (c._id || c.id) !== id) };
+  }),
 
   clearCart: () => set({ cart: [] }),
 

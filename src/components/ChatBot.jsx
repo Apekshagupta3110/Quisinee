@@ -14,7 +14,7 @@ function parseBudget(label) {
 }
 
 export default function ChatBot() {
-  const menuItems = useStore((s) => s.menuItems);
+  const menuItems = useStore((s) => s.dbMenu);
   const addToCart = useStore((s) => s.addToCart);
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0); // 0=mood 1=taste 2=budget 3=results
@@ -100,7 +100,7 @@ export default function ChatBot() {
             ...prev,
             { from: 'bot', text: "Hmm, nothing matched perfectly, but here are our top picks!" },
             ...menuItems
-              .filter((it) => it.isAvailable)
+              .filter((it) => it.inStock)
               .slice(0, 2)
               .map((r) => ({
                 from: 'bot',

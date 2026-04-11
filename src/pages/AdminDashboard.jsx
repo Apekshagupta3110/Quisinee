@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -52,6 +52,14 @@ function KanbanBoard() {
     },
   };
 
+  const getETA = (status, timestamp) => {
+    const elapsed = Math.floor((Date.now() - new Date(timestamp).getTime()) / 60000);
+    if (status === 'New') return { label: 'Just placed', eta: '~10 min', color: 'text-orange-500' };
+    if (status === 'Preparing') return { label: `${elapsed}m ago`, eta: '~5 min', color: 'text-amber-500' };
+    if (status === 'Served') return { label: 'Completed', eta: null, color: 'text-green-500' };
+    return { label: '', eta: null, color: '' };
+  };
+
   return (
     <div>
       <h2 className="font-serif text-2xl font-bold text-headline mb-4">
@@ -78,50 +86,70 @@ function KanbanBoard() {
               </div>
               <div className="space-y-2 min-h-[100px]">
                 <AnimatePresence>
-                  {colOrders.map((order) => (
-                    <motion.div
-                      key={order.orderId}
-                      layout
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, x: 50 }}
-                      className={`${cm.bg} border ${cm.border} rounded-xl p-3`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-mono text-sage-400">
-                          {order.orderId}
-                        </span>
-                        <span className="text-xs text-sage-500">
-                          Table {order.tableNumber}
-                        </span>
-                      </div>
-                      <p className="text-sm font-medium text-sage-800 mb-1">
-                        {order.customerName}
-                      </p>
-                      <div className="space-y-0.5 mb-2">
-                        {order.items.map((it) => (
-                          <p key={it.id} className="text-xs text-sage-500">
-                            {it.name} × {it.qty}
-                          </p>
-                        ))}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-bold text-sage-700">
-                          ₹{order.totalAmount}
-                        </span>
-                        {next && (
-                          <motion.button
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => updateOrderStatus(order.orderId, next)}
-                            className={`text-xs font-medium px-3 py-1 rounded-full ${cm.btn} flex items-center gap-1`}
-                          >
-                            {next}
-                            <ChevronRight className="w-3 h-3" />
-                          </motion.button>
-                        )}
-                      </div>
-                    </motion.div>
-                  ))}
+                  {colOrders.map((order) => {
+                    const etaInfo = getETA(order.status, order.timestamp);
+                    return (
+                      <motion.div
+                        key={order.orderId}
+                        layout
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, x: 50 }}
+                        className={`${cm.bg} border ${cm.border} rounded-xl p-3`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-mono text-sage-400">
+                            {order.orderId}
+                          </span>
+                          <span className="text-xs text-sage-500">
+                            Table {order.tableNumber}
+                          </span>
+                        </div>
+
+                        {/* ETA Row */}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`text-[10px] font-semibold ${etaInfo.color}`}>
+                            {etaInfo.label}
+                          </span>
+                          {etaInfo.eta && (
+                            <span className="text-[10px] bg-white text-sage-600 px-2 py-0.5 rounded-full border border-sage-100">
+                              Ready in {etaInfo.eta}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-sm font-medium text-sage-800 mb-0.5">
+                          {order.customerName}
+                        </p>
+                        <p className="text-[10px] text-sage-400 mb-1">
+                          {new Date(order.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+
+                        <div className="space-y-0.5 mb-2">
+                          {order.items.map((it) => (
+                            <p key={it._id || it.id} className="text-xs text-sage-500">
+                              {it.name} × {it.qty}
+                            </p>
+                          ))}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-bold text-sage-700">
+                            ₹{order.totalAmount}
+                          </span>
+                          {next && (
+                            <motion.button
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => updateOrderStatus(order.orderId, next)}
+                              className={`text-xs font-medium px-3 py-1 rounded-full ${cm.btn} flex items-center gap-1`}
+                            >
+                              {next}
+                              <ChevronRight className="w-3 h-3" />
+                            </motion.button>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
                 </AnimatePresence>
               </div>
             </div>
@@ -132,10 +160,44 @@ function KanbanBoard() {
   );
 }
 
-// --- Menu Management ---
+// --- Menu Management (DB-backed) ---
 function MenuManagement() {
-  const menuItems = useStore((s) => s.menuItems);
-  const toggleAvailability = useStore((s) => s.toggleAvailability);
+  const dbMenu = useStore((s) => s.dbMenu);
+  const fetchMenu = useStore((s) => s.fetchMenu);
+  const updateMenuItem = useStore((s) => s.updateMenuItem);
+  const menuLoading = useStore((s) => s.menuLoading);
+
+  const [prices, setPrices] = useState({});
+
+  useEffect(() => { fetchMenu(); }, []);
+
+  // Sync local price state when dbMenu loads
+  useEffect(() => {
+    const initial = {};
+    dbMenu.forEach((item) => { initial[item._id] = String(item.price); });
+    setPrices(initial);
+  }, [dbMenu]);
+
+  const handlePriceBlur = async (item) => {
+    const newPrice = Number(prices[item._id]);
+    if (!isNaN(newPrice) && newPrice > 0 && newPrice !== item.price) {
+      await updateMenuItem(item._id, { price: newPrice });
+    } else {
+      setPrices((prev) => ({ ...prev, [item._id]: String(item.price) }));
+    }
+  };
+
+  const handleToggleStock = async (item) => {
+    await updateMenuItem(item._id, { inStock: !item.inStock });
+  };
+
+  if (menuLoading && dbMenu.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-[#E07A5F] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -146,30 +208,20 @@ function MenuManagement() {
         <table className="w-full min-w-[640px] border-collapse text-left">
           <thead>
             <tr className="border-b border-sage-100 bg-sage-50/80">
-              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-charcoal w-14">
-                #
-              </th>
-              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-charcoal min-w-[200px]">
-                Item
-              </th>
-              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-charcoal min-w-[120px]">
-                Category
-              </th>
-              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-charcoal min-w-[96px]">
-                Price
-              </th>
-              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-charcoal text-center min-w-[160px]">
-                Available
-              </th>
+              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-charcoal w-14">#</th>
+              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-charcoal min-w-[200px]">Item</th>
+              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-charcoal min-w-[120px]">Category</th>
+              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-charcoal min-w-[120px]">Price</th>
+              <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wide text-charcoal text-center min-w-[160px]">In Stock</th>
             </tr>
           </thead>
           <tbody>
-            {menuItems.map((item, i) => (
+            {dbMenu.map((item, i) => (
               <motion.tr
-                key={item.id}
+                key={item._id}
                 layout
                 className={`border-b border-sage-50 last:border-b-0 ${
-                  !item.isAvailable ? 'bg-gray-50/80 opacity-60' : ''
+                  !item.inStock ? 'bg-gray-50/80 opacity-60' : ''
                 }`}
               >
                 <td className="px-5 py-4 align-middle text-xs text-sage-400 whitespace-nowrap">
@@ -178,8 +230,9 @@ function MenuManagement() {
                 <td className="px-5 py-4 align-middle">
                   <div className="flex items-center gap-3 min-w-0">
                     <img
-                      src={item.image}
+                      src={item.image || item.imageUrl}
                       alt={item.name}
+                      onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=80&q=80'; }}
                       className="w-9 h-9 rounded-lg object-cover shrink-0"
                     />
                     <span className="text-sm font-medium text-sage-800 truncate">
@@ -190,30 +243,37 @@ function MenuManagement() {
                 <td className="px-5 py-4 align-middle text-sm text-sage-600 whitespace-nowrap">
                   {item.category}
                 </td>
-                <td className="px-5 py-4 align-middle text-sm font-semibold text-terracotta-300 whitespace-nowrap">
-                  ₹{item.price}
+                <td className="px-5 py-4 align-middle">
+                  <div className="flex items-center gap-1">
+                    <span className="text-sage-400 text-sm">₹</span>
+                    <input
+                      type="number"
+                      value={prices[item._id] ?? item.price}
+                      onChange={(e) => setPrices((prev) => ({ ...prev, [item._id]: e.target.value }))}
+                      onBlur={() => handlePriceBlur(item)}
+                      className="w-20 px-2 py-1 border border-sage-200 rounded-lg text-sm font-semibold text-terracotta-300 focus:outline-none focus:border-sage-400"
+                    />
+                  </div>
                 </td>
                 <td className="px-5 py-4 align-middle">
-                  <div className="flex items-center justify-center gap-3 flex-wrap">
+                  <div className="flex items-center justify-center gap-3">
                     <button
                       type="button"
-                      onClick={() => toggleAvailability(item.id)}
+                      onClick={() => handleToggleStock(item)}
                       className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
-                        item.isAvailable ? 'bg-sage-300' : 'bg-gray-300'
+                        item.inStock ? 'bg-sage-300' : 'bg-gray-300'
                       }`}
                     >
                       <motion.div
                         layout
                         className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm"
-                        style={{ left: item.isAvailable ? '22px' : '2px' }}
+                        style={{ left: item.inStock ? '22px' : '2px' }}
                       />
                     </button>
-                    <span
-                      className={`text-xs font-medium whitespace-nowrap ${
-                        item.isAvailable ? 'text-sage-500' : 'text-red-400'
-                      }`}
-                    >
-                      {item.isAvailable ? 'Live' : 'Sold Out'}
+                    <span className={`text-xs font-medium whitespace-nowrap ${
+                      item.inStock ? 'text-sage-500' : 'text-red-400'
+                    }`}>
+                      {item.inStock ? 'Live' : 'Sold Out'}
                     </span>
                   </div>
                 </td>
@@ -221,6 +281,11 @@ function MenuManagement() {
             ))}
           </tbody>
         </table>
+        {dbMenu.length === 0 && !menuLoading && (
+          <div className="text-center py-12 text-sage-400 text-sm">
+            No items in database yet. Add some via Menu Manager.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -254,7 +319,6 @@ export default function AdminDashboard() {
           : 'hidden lg:flex fixed left-0 top-0 z-30 w-64 h-screen'
       }`}
     >
-      {/* Logo */}
       <div className="px-5 py-5 border-b border-sage-100 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <UtensilsCrossed className="w-5 h-5 text-sage-300" />
@@ -304,10 +368,8 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Desktop Sidebar */}
       <Sidebar />
 
-      {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {sidebarOpen && (
           <>
@@ -331,18 +393,13 @@ export default function AdminDashboard() {
         )}
       </AnimatePresence>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-screen ml-0 lg:ml-64 p-4 sm:p-6 lg:p-8 bg-cream">
-        {/* Top bar */}
         <div className="sticky top-0 z-20 mb-4 sm:mb-6 bg-white/80 backdrop-blur-md border border-sage-100 rounded-xl px-4 py-3 flex items-center gap-3">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="lg:hidden p-1 shrink-0"
-          >
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-1 shrink-0">
             <Menu className="w-5 h-5 text-sage-600" />
           </button>
           <h2 className="font-semibold text-headline">
-            {tab === 'orders' ? 'Live Orders' : 
+            {tab === 'orders' ? 'Live Orders' :
              tab === 'menu' ? 'Menu Management' :
              tab === 'menu-manager' ? 'Menu Manager' :
              tab === 'story-manager' ? 'Story Manager' : 'Dashboard'}
@@ -352,43 +409,22 @@ export default function AdminDashboard() {
           </span>
         </div>
 
-        {/* Content */}
         <div className="flex-1 min-h-0">
           <AnimatePresence mode="wait">
             {tab === 'orders' ? (
-              <motion.div
-                key="orders"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-              >
+              <motion.div key="orders" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
                 <KanbanBoard />
               </motion.div>
             ) : tab === 'menu' ? (
-              <motion.div
-                key="menu"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-              >
+              <motion.div key="menu" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
                 <MenuManagement />
               </motion.div>
             ) : tab === 'menu-manager' ? (
-              <motion.div
-                key="menu-manager"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-              >
+              <motion.div key="menu-manager" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
                 <MenuManager />
               </motion.div>
             ) : tab === 'story-manager' ? (
-              <motion.div
-                key="story-manager"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-              >
+              <motion.div key="story-manager" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
                 <StoryManager />
               </motion.div>
             ) : null}
