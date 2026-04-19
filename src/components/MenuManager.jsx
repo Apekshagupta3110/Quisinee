@@ -265,12 +265,12 @@ function MenuItemCard({ item, onUpdate, onDelete }) {
     }
   };
 
-
 const handleToggleStock = async (newValue) => {
   setSaving(true);
   await onUpdate(item._id, { inStock: newValue });
   setSaving(false);
 };
+
 
   const handleDelete = async () => {
     if (!window.confirm(`Remove "${item.name}" from the menu?`)) return;

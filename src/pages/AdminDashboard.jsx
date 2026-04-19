@@ -188,8 +188,9 @@ function MenuManagement() {
   };
 
 
-  const handleToggleStock = async (item) => {
+const handleToggleStock = async (item) => {
   await updateMenuItem(item._id, { inStock: !item.inStock });
+  await fetchMenu();
 };
 
   if (menuLoading && dbMenu.length === 0) {
