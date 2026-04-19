@@ -187,9 +187,10 @@ function MenuManagement() {
     }
   };
 
+
   const handleToggleStock = async (item) => {
-    await updateMenuItem(item._id, { inStock: !item.inStock });
-  };
+  await updateMenuItem(item._id, { inStock: !item.inStock });
+};
 
   if (menuLoading && dbMenu.length === 0) {
     return (
@@ -316,7 +317,7 @@ export default function AdminDashboard() {
       className={`flex flex-col bg-white border-r border-sage-100 ${
         mobile
           ? 'w-64 h-full'
-          : 'hidden lg:flex fixed left-0 top-0 z-30 w-64 h-screen'
+            :'hidden lg:flex sticky top-0 self-start w-64 h-screen flex-shrink-0'
       }`}
     >
       <div className="px-5 py-5 border-b border-sage-100 flex items-center justify-between">
@@ -393,7 +394,7 @@ export default function AdminDashboard() {
         )}
       </AnimatePresence>
 
-      <div className="flex-1 flex flex-col min-h-screen ml-0 lg:ml-64 p-4 sm:p-6 lg:p-8 bg-cream">
+<div className="flex-1 min-w-0 flex flex-col min-h-screen p-4 sm:p-6 lg:p-8 bg-cream">
         <div className="sticky top-0 z-20 mb-4 sm:mb-6 bg-white/80 backdrop-blur-md border border-sage-100 rounded-xl px-4 py-3 flex items-center gap-3">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-1 shrink-0">
             <Menu className="w-5 h-5 text-sage-600" />

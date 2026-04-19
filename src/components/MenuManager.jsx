@@ -265,11 +265,12 @@ function MenuItemCard({ item, onUpdate, onDelete }) {
     }
   };
 
-  const handleToggleStock = async () => {
-    setSaving(true);
-    await onUpdate(item._id, { inStock: !item.inStock });
-    setSaving(false);
-  };
+
+const handleToggleStock = async (newValue) => {
+  setSaving(true);
+  await onUpdate(item._id, { inStock: newValue });
+  setSaving(false);
+};
 
   const handleDelete = async () => {
     if (!window.confirm(`Remove "${item.name}" from the menu?`)) return;
@@ -400,7 +401,7 @@ export default function MenuManager() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F9F8F6] font-sans">
+   <div className="bg-[#F9F8F6] font-sans">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
 
         {/* Page header */}
