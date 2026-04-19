@@ -1,7 +1,8 @@
+
 {
   "rewrites": [
     { "source": "/(.*)", "destination": "/" }
   ],
-  "buildCommand": "npm install && npm run build",
+  "buildCommand": "npm install --include=dev && npm run build",
   "installCommand": "npm install --include=dev"
 }
