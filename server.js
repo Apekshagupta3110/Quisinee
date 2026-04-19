@@ -9,10 +9,11 @@ app.use(express.json({ limit: '20mb' })); // Allow large Base64 payloads
 app.use(cors({
   origin: [
     'http://localhost:5173',
-    'https://quisine-app.vercel.app'  // ← replace with your actual Vercel URL
+    'https://quisine-app.vercel.app'
   ],
   credentials: true
 }));
+
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/quisine');
