@@ -1,8 +1,13 @@
 
 {
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
-  ],
-  "buildCommand": "npm install --include=dev && npx vite build",
-  "installCommand": "npm install --include=dev"
+  "routes": [
+    {
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
 }
