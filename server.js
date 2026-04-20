@@ -1,6 +1,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
+import bcrypt from 'bcryptjs';
 import 'dotenv/config';
 
 const app = express();
@@ -13,7 +14,6 @@ app.use(cors({
   ],
   credentials: true
 }));
-
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/quisine');
@@ -48,6 +48,67 @@ const storySchema = new mongoose.Schema(
 );
 
 const Story = mongoose.model('Story', storySchema);
+
+// ── NEW: Customer schema ──
+const customerSchema = new mongoose.Schema(
+  {
+    name:         { type: String, required: true },
+    email:        { type: String, required: true, unique: true, lowercase: true, trim: true },
+    passwordHash: { type: String, required: true },
+    profile: {
+      phone:                  { type: String, default: '' },
+      avatarUrl:              { type: String, default: '' },
+      bio:                    { type: String, default: '' },
+      dateOfBirth:            { type: String, default: '' },
+      emergencyContactName:   { type: String, default: '' },
+      emergencyContactPhone:  { type: String, default: '' },
+      preferences: {
+        spiceLevel:           { type: String, default: 'Medium' },
+        dietaryPreferences:   [{ type: String }],
+        favoriteCuisine:      { type: String, default: '' },
+        newsletterOptIn:      { type: Boolean, default: false },
+      },
+      addresses: [
+        {
+          label:      { type: String, default: 'Primary' },
+          line1:      { type: String, default: '' },
+          line2:      { type: String, default: '' },
+          city:       { type: String, default: '' },
+          state:      { type: String, default: '' },
+          postalCode: { type: String, default: '' },
+          country:    { type: String, default: 'India' },
+          isPrimary:  { type: Boolean, default: true },
+        },
+      ],
+    },
+  },
+  { timestamps: true }
+);
+
+const Customer = mongoose.model('Customer', customerSchema);
+
+// ── NEW: Order schema ──
+const orderSchema = new mongoose.Schema(
+  {
+    orderId:      { type: String, default: () => `ORD-${Date.now().toString(36).toUpperCase()}` },
+    tableNumber:  { type: Number },
+    customerName: { type: String },
+    items: [
+      {
+        id:    { type: String },
+        name:  { type: String },
+        qty:   { type: Number },
+        price: { type: Number },
+        image: { type: String, default: '' },
+      },
+    ],
+    totalAmount: { type: Number, required: true },
+    status:      { type: String, default: 'New', enum: ['New', 'Preparing', 'Served'] },
+  },
+  { timestamps: true }
+);
+
+const Order = mongoose.model('Order', orderSchema);
 
 // ─────────────────────────────────────────────
 // Menu Routes
@@ -149,6 +210,108 @@ app.delete('/api/stories/:id', async (req, res) => {
     res.json({ message: 'Story deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// Customer Routes (NEW)
+// ─────────────────────────────────────────────
+
+// POST signup — create a new customer
+app.post('/api/customers/signup', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email and password are required' });
+    }
+    const existing = await Customer.findOne({ email: email.toLowerCase() });
+    if (existing) {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const customer = new Customer({ name, email, passwordHash });
+    await customer.save();
+    // Return the customer without the password hash
+    res.status(201).json({ _id: customer._id, name: customer.name, email: customer.email, profile: customer.profile });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST login — verify credentials
+app.post('/api/customers/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    const customer = await Customer.findOne({ email: email.toLowerCase() });
+    if (!customer) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    const valid = await bcrypt.compare(password, customer.passwordHash);
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    // Return the customer without the password hash
+    res.json({ _id: customer._id, name: customer.name, email: customer.email, profile: customer.profile });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT update customer profile
+app.put('/api/customers/:id/profile', async (req, res) => {
+  try {
+    const customer = await Customer.findByIdAndUpdate(
+      req.params.id,
+      { profile: req.body.profile },
+      { new: true, runValidators: true }
+    );
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+    res.json({ _id: customer._id, name: customer.name, email: customer.email, profile: customer.profile });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// Order Routes (NEW)
+// ─────────────────────────────────────────────
+
+// GET all orders — used by AdminDashboard
+app.get('/api/orders', async (req, res) => {
+  try {
+    const orders = await Order.find().sort({ createdAt: -1 });
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST place a new order — called when customer clicks "Place Order"
+app.post('/api/orders', async (req, res) => {
+  try {
+    const order = new Order(req.body);
+    await order.save();
+    res.status(201).json(order);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// PATCH update order status — called by admin Kanban board
+app.patch('/api/orders/:id', async (req, res) => {
+  try {
+    const order = await Order.findByIdAndUpdate(
+      req.params.id,
+      { status: req.body.status },
+      { new: true, runValidators: true }
+    );
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    res.json(order);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 
