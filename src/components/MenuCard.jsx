@@ -17,7 +17,7 @@ export default function MenuCard({ item, onAR, index = 0 }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ delay: index * 0.05, type: 'spring', stiffness: 260, damping: 20 }}
       className={`bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow ${
-        !item.isAvailable ? 'opacity-50 grayscale pointer-events-none' : ''
+       !(item.isAvailable ?? item.inStock) ? 'opacity-50 grayscale pointer-events-none' : ''
       }`}
     >
       {/* Image */}
@@ -34,7 +34,7 @@ export default function MenuCard({ item, onAR, index = 0 }) {
             <Star className="w-2.5 h-2.5 fill-white" /> Bestseller
           </span>
         )}
-        {!item.isAvailable && (
+        {!(item.isAvailable ?? item.inStock) && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
             <span className="bg-white text-charcoal text-xs font-bold px-3 py-1 rounded-full">
               Sold Out
