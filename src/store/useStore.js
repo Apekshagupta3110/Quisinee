@@ -183,6 +183,7 @@ const createUserProfile = (overrides = {}) => ({
   ...overrides,
 });
 
+// Keep the demo user so test@test.com / password123 still works offline
 const initialUsers = [
   {
     email: 'test@test.com',
@@ -396,27 +397,66 @@ const useStore = create((set, get) => ({
   logoutAdmin: () =>
     set({ auth: { role: null, customerName: '', tableNumber: null }, currentUser: null }),
 
-  loginCustomer: (email, password) => {
-    const { users } = get();
-    const user = users.find((u) => u.email === email && u.password === password);
-    if (!user) return null;
-    set({
-      auth: { role: 'Customer', customerName: user.name, tableNumber: null },
-      currentUser: user,
-    });
-    return user;
+  // ── CHANGED: now async, tries API first, falls back to local demo user ──
+  loginCustomer: async (email, password) => {
+    try {
+      const { data } = await API.post('/customers/login', { email, password });
+      const user = {
+        name: data.name,
+        email: data.email,
+        _id: data._id,
+        profile: data.profile ?? createUserProfile(),
+      };
+      set({
+        auth: { role: 'Customer', customerName: user.name, tableNumber: null },
+        currentUser: user,
+      });
+      return user;
+    } catch {
+      // Fallback: let demo user (test@test.com) still work without a backend
+      const { users } = get();
+      const user = users.find((u) => u.email === email && u.password === password);
+      if (!user) return null;
+      set({
+        auth: { role: 'Customer', customerName: user.name, tableNumber: null },
+        currentUser: user,
+      });
+      return user;
+    }
   },
 
-  signupCustomer: (name, email, password) => {
-    const { users } = get();
-    if (users.find((u) => u.email === email)) return null;
-    const newUser = { name, email, password, profile: createUserProfile() };
-    set((state) => ({
-      users: [...state.users, newUser],
-      auth: { role: 'Customer', customerName: name, tableNumber: null },
-      currentUser: newUser,
-    }));
-    return newUser;
+  // ── CHANGED: now async, tries API first, falls back to local signup ──
+  signupCustomer: async (name, email, password) => {
+    try {
+      const { data } = await API.post('/customers/signup', { name, email, password });
+      const user = {
+        name: data.name,
+        email: data.email,
+        _id: data._id,
+        profile: data.profile ?? createUserProfile(),
+      };
+      set((state) => ({
+        users: [...state.users, user],
+        auth: { role: 'Customer', customerName: name, tableNumber: null },
+        currentUser: user,
+      }));
+      return user;
+    } catch (err) {
+      // If it's a duplicate-email error from server, return null so UI shows the error
+      const status = err.response?.status;
+      if (status === 409 || status === 400) return null;
+
+      // Network error / server down — save locally so app still works for demo
+      const { users } = get();
+      if (users.find((u) => u.email === email)) return null;
+      const newUser = { name, email, password, profile: createUserProfile() };
+      set((state) => ({
+        users: [...state.users, newUser],
+        auth: { role: 'Customer', customerName: name, tableNumber: null },
+        currentUser: newUser,
+      }));
+      return newUser;
+    }
   },
 
   updateCurrentUserProfile: (updates) =>
@@ -457,33 +497,45 @@ const useStore = create((set, get) => ({
   cart: [],
   collaborativeMode: false,
 
-
+  // ── CHANGED: pushes to Pusher when collaborative mode is on ──
   addToCart: (menuItem) =>
-  set((state) => {
-    const itemId = menuItem._id || menuItem.id;
-    const existing = state.cart.find((c) => (c._id || c.id) === itemId);
-    if (existing) {
-      return {
-        cart: state.cart.map((c) =>
-          (c._id || c.id) === itemId ? { ...c, qty: c.qty + 1 } : c
-        ),
-      };
-    }
-    return { cart: [...state.cart, { ...menuItem, qty: 1 }] };
-  }),
+    set((state) => {
+      const itemId = menuItem._id || menuItem.id;
+      const existing = state.cart.find((c) => (c._id || c.id) === itemId);
+      const newCart = existing
+        ? state.cart.map((c) =>
+            (c._id || c.id) === itemId ? { ...c, qty: c.qty + 1 } : c
+          )
+        : [...state.cart, { ...menuItem, qty: 1 }];
 
-removeFromCart: (id) =>
-  set((state) => {
-    const existing = state.cart.find((c) => (c._id || c.id) === id);
-    if (existing && existing.qty > 1) {
-      return {
-        cart: state.cart.map((c) =>
-          (c._id || c.id) === id ? { ...c, qty: c.qty - 1 } : c
-        ),
-      };
-    }
-    return { cart: state.cart.filter((c) => (c._id || c.id) !== id) };
-  }),
+      // Push to Pusher if collaborative mode is on
+      if (state.collaborativeMode && state.auth.tableNumber) {
+        fetch('/api/update-cart', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channel: `table-${state.auth.tableNumber}`,
+            event: 'update-cart',
+            payload: { items: [{ ...menuItem, id: itemId, qtyDelta: 1 }] },
+          }),
+        }).catch(() => {}); // silent fail — don't break the cart
+      }
+
+      return { cart: newCart };
+    }),
+
+  removeFromCart: (id) =>
+    set((state) => {
+      const existing = state.cart.find((c) => (c._id || c.id) === id);
+      if (existing && existing.qty > 1) {
+        return {
+          cart: state.cart.map((c) =>
+            (c._id || c.id) === id ? { ...c, qty: c.qty - 1 } : c
+          ),
+        };
+      }
+      return { cart: state.cart.filter((c) => (c._id || c.id) !== id) };
+    }),
 
   clearCart: () => set({ cart: [] }),
 
@@ -507,28 +559,66 @@ removeFromCart: (id) =>
   // ─────────────────────────────────────────────
   orders: [],
 
-  placeOrder: () => {
-    const { cart, auth, getCartTotal } = get();
-    if (cart.length === 0) return;
-    const newOrder = {
-      orderId: `ORD-${Date.now().toString(36).toUpperCase()}`,
-      tableNumber: auth.tableNumber,
-      customerName: auth.customerName,
-      items: [...cart],
-      totalAmount: getCartTotal(),
-      status: 'New',
-      timestamp: new Date().toISOString(),
-    };
-    set((state) => ({ orders: [newOrder, ...state.orders], cart: [] }));
-    return newOrder;
+  // ── NEW: fetch all orders from DB (used by AdminDashboard) ──
+  fetchOrders: async () => {
+    try {
+      const { data } = await API.get('/orders');
+      set({ orders: data });
+    } catch {
+      // Server down or no route yet — silently keep existing orders
+    }
   },
 
-  updateOrderStatus: (orderId, newStatus) =>
+  // ── CHANGED: saves order to DB, falls back to local if API fails ──
+  placeOrder: async () => {
+    const { cart, auth, getCartTotal } = get();
+    if (cart.length === 0) return;
+
+    const orderPayload = {
+      tableNumber: auth.tableNumber,
+      customerName: auth.customerName,
+      items: cart.map((i) => ({
+        id: i._id || i.id,
+        name: i.name,
+        qty: i.qty,
+        price: i.price,
+        image: i.image,
+      })),
+      totalAmount: getCartTotal(),
+      status: 'New',
+    };
+
+    try {
+      const { data } = await API.post('/orders', orderPayload);
+      set((state) => ({ orders: [data, ...state.orders], cart: [] }));
+      return data;
+    } catch {
+      // API unreachable — save locally so the UI still works for demo
+      const local = {
+        ...orderPayload,
+        orderId: `ORD-${Date.now().toString(36).toUpperCase()}`,
+        timestamp: new Date().toISOString(),
+      };
+      set((state) => ({ orders: [local, ...state.orders], cart: [] }));
+      return local;
+    }
+  },
+
+  // ── CHANGED: updates status on DB too, falls back to local ──
+  updateOrderStatus: async (orderId, newStatus) => {
+    // Optimistic local update first so UI feels instant
     set((state) => ({
       orders: state.orders.map((o) =>
-        o.orderId === orderId ? { ...o, status: newStatus } : o
+        (o._id === orderId || o.orderId === orderId) ? { ...o, status: newStatus } : o
       ),
-    })),
+    }));
+    // Then persist to DB (fire-and-forget — UI already updated)
+    try {
+      await API.patch(`/orders/${orderId}`, { status: newStatus });
+    } catch {
+      // Silently ignore — local state is already correct for the session
+    }
+  },
 }));
 
 export default useStore;

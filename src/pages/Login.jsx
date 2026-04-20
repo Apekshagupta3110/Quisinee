@@ -10,15 +10,19 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  // â”€â”€ CHANGED: async so it awaits the API call in useStore â”€â”€
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email || !password) {
       setError('Please fill in all fields.');
       setTimeout(() => setError(''), 3000);
       return;
     }
-    const user = loginCustomer(email, password);
+    setLoading(true);
+    const user = await loginCustomer(email, password);
+    setLoading(false);
     if (user) {
       navigate('/select-table');
     } else {
@@ -82,9 +86,10 @@ export default function Login() {
               </div>
               <button
                 type="submit"
-                className="w-full bg-primary text-white rounded-xl py-3 font-semibold hover:bg-terracotta-400 transition-colors"
+                disabled={loading}
+                className="w-full bg-primary text-white rounded-xl py-3 font-semibold hover:bg-terracotta-400 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Sign In
+                {loading ? 'Signing inâ€¦' : 'Sign In'}
               </button>
             </form>
 
@@ -123,3 +128,4 @@ export default function Login() {
     </div>
   );
 }
+

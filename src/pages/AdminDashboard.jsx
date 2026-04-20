@@ -21,6 +21,14 @@ import StoryManager from '../components/StoryManager';
 function KanbanBoard() {
   const orders = useStore((s) => s.orders);
   const updateOrderStatus = useStore((s) => s.updateOrderStatus);
+  const fetchOrders = useStore((s) => s.fetchOrders); // ── NEW ──
+
+  // ── NEW: load orders from DB on mount, then poll every 15s ──
+  useEffect(() => {
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const columns = [
     { status: 'New', icon: Clock, color: 'terracotta', next: 'Preparing' },
@@ -87,10 +95,12 @@ function KanbanBoard() {
               <div className="space-y-2 min-h-[100px]">
                 <AnimatePresence>
                   {colOrders.map((order) => {
-                    const etaInfo = getETA(order.status, order.timestamp);
+                    const etaInfo = getETA(order.status, order.timestamp || order.createdAt);
+                    // Support both local orderId and DB _id
+                    const orderId = order._id || order.orderId;
                     return (
                       <motion.div
-                        key={order.orderId}
+                        key={orderId}
                         layout
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -99,7 +109,7 @@ function KanbanBoard() {
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-xs font-mono text-sage-400">
-                            {order.orderId}
+                            {order.orderId || order._id}
                           </span>
                           <span className="text-xs text-sage-500">
                             Table {order.tableNumber}
@@ -122,7 +132,7 @@ function KanbanBoard() {
                           {order.customerName}
                         </p>
                         <p className="text-[10px] text-sage-400 mb-1">
-                          {new Date(order.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(order.timestamp || order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
 
                         <div className="space-y-0.5 mb-2">
@@ -139,7 +149,7 @@ function KanbanBoard() {
                           {next && (
                             <motion.button
                               whileTap={{ scale: 0.95 }}
-                              onClick={() => updateOrderStatus(order.orderId, next)}
+                              onClick={() => updateOrderStatus(orderId, next)}
                               className={`text-xs font-medium px-3 py-1 rounded-full ${cm.btn} flex items-center gap-1`}
                             >
                               {next}
@@ -187,11 +197,10 @@ function MenuManagement() {
     }
   };
 
-
-const handleToggleStock = async (item) => {
-  await updateMenuItem(item._id, { inStock: !item.inStock });
-  await fetchMenu();
-};
+  const handleToggleStock = async (item) => {
+    await updateMenuItem(item._id, { inStock: !item.inStock });
+    await fetchMenu();
+  };
 
   if (menuLoading && dbMenu.length === 0) {
     return (
@@ -395,7 +404,7 @@ export default function AdminDashboard() {
         )}
       </AnimatePresence>
 
-<div className="flex-1 min-w-0 flex flex-col min-h-screen p-4 sm:p-6 lg:p-8 bg-cream">
+      <div className="flex-1 min-w-0 flex flex-col min-h-screen p-4 sm:p-6 lg:p-8 bg-cream">
         <div className="sticky top-0 z-20 mb-4 sm:mb-6 bg-white/80 backdrop-blur-md border border-sage-100 rounded-xl px-4 py-3 flex items-center gap-3">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-1 shrink-0">
             <Menu className="w-5 h-5 text-sage-600" />
@@ -436,3 +445,4 @@ export default function AdminDashboard() {
     </div>
   );
 }
+

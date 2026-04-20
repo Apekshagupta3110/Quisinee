@@ -11,8 +11,10 @@ export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  // â”€â”€ CHANGED: async so it awaits the API call in useStore â”€â”€
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim() || !email || !password) {
       setError('Please fill in all fields.');
@@ -24,7 +26,9 @@ export default function Signup() {
       setTimeout(() => setError(''), 3000);
       return;
     }
-    const user = signupCustomer(name.trim(), email, password);
+    setLoading(true);
+    const user = await signupCustomer(name.trim(), email, password);
+    setLoading(false);
     if (user) {
       navigate('/select-table');
     } else {
@@ -98,9 +102,10 @@ export default function Signup() {
               </div>
               <button
                 type="submit"
-                className="w-full bg-primary text-white rounded-xl py-3 font-semibold hover:bg-terracotta-400 transition-colors"
+                disabled={loading}
+                className="w-full bg-primary text-white rounded-xl py-3 font-semibold hover:bg-terracotta-400 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Create Account
+                {loading ? 'Creating accountâ€¦' : 'Create Account'}
               </button>
             </form>
 
@@ -131,3 +136,4 @@ export default function Signup() {
     </div>
   );
 }
+
