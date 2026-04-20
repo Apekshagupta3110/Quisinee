@@ -7,7 +7,7 @@ export default function MenuCard({ item, onAR, index = 0 }) {
   const addToCart = useStore((s) => s.addToCart);
   const removeFromCart = useStore((s) => s.removeFromCart);
 
-  const cartItem = cart.find((c) => c.id === item.id);
+  const cartItem = cart.find((c) => (c._id || c.id) === (item._id || item.id));
   const qty = cartItem?.qty || 0;
 
   return (
@@ -90,7 +90,7 @@ export default function MenuCard({ item, onAR, index = 0 }) {
             <div className="flex items-center justify-center gap-3 bg-tomato-50 rounded-xl py-1.5 px-3">
               <motion.button
                 whileTap={{ scale: 0.85 }}
-                onClick={() => removeFromCart(item.id)}
+                onClick={() => removeFromCart(item._id || item.id)}
                 className="w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-sm text-tomato-400"
               >
                 <Minus className="w-4 h-4" />

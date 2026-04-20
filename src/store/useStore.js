@@ -457,7 +457,8 @@ const useStore = create((set, get) => ({
   cart: [],
   collaborativeMode: false,
 
-    addToCart: (menuItem) =>
+
+  addToCart: (menuItem) =>
   set((state) => {
     const itemId = menuItem._id || menuItem.id;
     const existing = state.cart.find((c) => (c._id || c.id) === itemId);
@@ -471,7 +472,7 @@ const useStore = create((set, get) => ({
     return { cart: [...state.cart, { ...menuItem, qty: 1 }] };
   }),
 
-  removeFromCart: (id) =>
+removeFromCart: (id) =>
   set((state) => {
     const existing = state.cart.find((c) => (c._id || c.id) === id);
     if (existing && existing.qty > 1) {
