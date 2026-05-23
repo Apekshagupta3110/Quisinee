@@ -89,7 +89,7 @@ export default function Login() {
                 disabled={loading}
                 className="w-full bg-primary text-white rounded-xl py-3 font-semibold hover:bg-terracotta-400 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {loading ? 'Signing in¦' : 'Sign In'}
+                {loading ? 'Signing in....' : 'Sign In'}
               </button>
             </form>
 
